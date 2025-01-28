@@ -97,19 +97,22 @@ router.get("/report", async (req, res) => {
             date: { $gte: start, $lte: end }
         });
 
-        // Initialize response with empty categories
-        const categorizedCosts = CATEGORIES.map(category => ({ [category]: [] }));
+        // Initialize response with categories set to `0`
+        const categorizedCosts = CATEGORIES.reduce((acc, category) => {
+            acc[category] = 0;
+            return acc;
+        }, {});
 
         // Populate response if there are costs
         costs.forEach(cost => {
-            const categoryData = categorizedCosts.find(item => item[cost.category]);
-            if (categoryData) {
-                categoryData[cost.category].push({
-                    sum: cost.sum,
-                    description: cost.description,
-                    day: new Date(cost.date).getDate()
-                });
+            if (categorizedCosts[cost.category] === 0) {
+                categorizedCosts[cost.category] = [];
             }
+            categorizedCosts[cost.category].push({
+                sum: cost.sum,
+                description: cost.description,
+                day: new Date(cost.date).getDate()
+            });
         });
 
         // Construct the response object
