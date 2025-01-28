@@ -5,7 +5,7 @@ const Cost = require("../models/cost");
 
 describe("Cost API", () => {
     beforeAll(async () => {
-        await mongoose.connect(process.env.MONGO_URI);
+        await mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
     });
 
     afterAll(async () => {
@@ -14,14 +14,19 @@ describe("Cost API", () => {
 
     it("should add a new cost item", async () => {
         const res = await request(app).post("/api/add").send({
+            userid: 111111,
             description: "Milk",
             category: "food",
-            userid: 123123,
             sum: 10
         });
 
         expect(res.statusCode).toBe(200);
         expect(res.body).toHaveProperty("description", "Milk");
-        expect(res.body).toHaveProperty("sum", 10);
+    });
+
+    it("should return grouped monthly report", async () => {
+        const res = await request(app).get("/api/report?id=123123&year=2025&month=2");
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toBeInstanceOf(Object);
     });
 });

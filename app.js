@@ -8,7 +8,7 @@ const userRoutes = require("./routes/user");
 const aboutRoutes = require("./routes/about");
 
 const app = express();
-const PORT = process.env.PORT || 3000;
+
 
 // Middleware
 app.use(bodyParser.json());
@@ -24,7 +24,13 @@ mongoose
     .then(() => console.log("Connected to MongoDB"))
     .catch((err) => console.error(err));
 
-// Start Server
-app.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
-});
+// Only start the server if not in a test environment
+if (process.env.NODE_ENV !== "test") {
+    const PORT = process.env.PORT || 3000;
+    app.listen(PORT, () => {
+        console.log(`Server running on http://localhost:${PORT}`);
+    });
+}
+
+
+module.exports = app;

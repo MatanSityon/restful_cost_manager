@@ -3,7 +3,9 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "test": "jest"
+    "start": "node app.js",
+    "dev": "nodemon app.js",
+    "test": "cross-env NODE_ENV=test jest --runInBand"
   },
   "keywords": [],
   "author": "",
@@ -17,6 +19,7 @@
     "nodemon": "^3.1.9"
   },
   "devDependencies": {
+    "cross-env": "^7.0.3",
     "jest": "^29.7.0",
     "supertest": "^7.0.0"
   }
