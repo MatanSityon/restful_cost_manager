@@ -1,55 +1,78 @@
 const express = require("express");
 const router = express.Router();
 const Cost = require("../models/cost");
+const User = require("../models/user"); // Import User model to check if the user exists
+
+// Define supported categories
+const CATEGORIES = ["food", "health", "housing", "sport", "education"];
 
 /**
- * @route POST /api/add
- * @description Adds a new cost item to the database.
+ * @route GET /api/report
+ * @description Retrieves the grouped monthly cost report for a user.
  * @access Public
- * @param {string} req.body.description - A short description of the cost.
- * @param {string} req.body.category - The category of the cost (must be one of: "food", "health", "housing", "sport", "education").
- * @param {number} req.body.userid - The ID of the user who owns this cost entry.
- * @param {number} req.body.sum - The total sum of the cost.
- * @param {string} [req.body.created_at] - (Optional) A full ISO timestamp for the date of the expense.
- * @param {number} [req.body.year] - (Optional) The year of the expense (used if `created_at` is not provided).
- * @param {number} [req.body.month] - (Optional) The month of the expense (1-12, used if `created_at` is not provided).
- * @param {number} [req.body.day] - (Optional) The day of the expense (used if `created_at` is not provided).
- * @returns {Object} The created cost item.
+ * @param {string} req.query.id - The user ID.
+ * @param {number} req.query.year - The year of the report.
+ * @param {number} req.query.month - The month of the report (1-12).
+ * @returns {Object} JSON response containing the cost report or an error message.
  */
-router.post("/add", async (req, res) => {
+router.get("/report", async (req, res) => {
     try {
-        const { description, category, userid, sum, created_at, year, month, day } = req.body;
+        const { id, year, month } = req.query;
 
-        let date;
-        if (created_at) {
-            // If `created_at` is provided, use it as the date
-            date = new Date(created_at);
-        } else if (year && month && day) {
-            // Convert year, month, and day to a UTC Date object
-            // Month is zero-indexed in JavaScript, so subtract 1
-            date = new Date(Date.UTC(year, month - 1, day, 12, 0, 0)); // 12:00 PM UTC prevents time zone shifts
-        } else {
-            // Default to the current date in UTC if no date is provided
-            date = new Date();
+        // Validate required parameters
+        if (!id || !year || !month) {
+            return res.status(400).json({ error: "Missing required parameters: id, year, month" });
         }
 
-        // Create a new cost entry
-        const cost = new Cost({
-            description,
-            category,
-            userid,
-            sum,
-            date
+        // Convert to numbers to ensure correct type
+        const userId = Number(id);
+        const reportYear = Number(year);
+        const reportMonth = Number(month);
+
+        // Check if user exists
+        const userExists = await User.findOne({ id: userId });
+        if (!userExists) {
+            return res.status(404).json({ error: `User with ID ${userId} not found` });
+        }
+
+        // Define the date range for filtering
+        const start = new Date(reportYear, reportMonth - 1, 1);
+        const end = new Date(reportYear, reportMonth, 0);
+
+        // Fetch costs for the given user and month
+        const costs = await Cost.find({
+            userid: userId,
+            date: { $gte: start, $lte: end }
         });
 
-        // Save the cost entry in MongoDB
-        await cost.save();
+        // Initialize response with empty categories
+        const categorizedCosts = CATEGORIES.map(category => ({ [category]: [] }));
 
-        // Return the saved cost item as JSON response
-        res.json(cost);
+        // Populate response if there are costs
+        costs.forEach(cost => {
+            const categoryData = categorizedCosts.find(item => item[cost.category]);
+            if (categoryData) {
+                categoryData[cost.category].push({
+                    sum: cost.sum,
+                    description: cost.description,
+                    day: new Date(cost.date).getDate()
+                });
+            }
+        });
+
+        // Construct the response object
+        const response = {
+            userid: userId,
+            year: reportYear,
+            month: reportMonth,
+            costs: categorizedCosts
+        };
+
+        res.json(response);
+
     } catch (err) {
-        // If an error occurs, send a 500 error response with the error message
-        res.status(500).json({ error: err.message });
+        console.error("Error fetching report:", err); // Log the error for debugging
+        res.status(500).json({ error: "Internal server error" });
     }
 });
 
