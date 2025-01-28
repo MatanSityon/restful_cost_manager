@@ -73,27 +73,6 @@ router.post("/users", async (req, res) => {
         // Handle server errors
         res.status(500).json({ error: err.message });
     }
-
 });
-// Add New User
-router.post("/users", async (req, res) => {
-    try {
-        const { id, first_name, last_name, birthday, marital_status } = req.body;
-
-        // Check if the user already exists
-        const existingUser = await User.findOne({ id });
-        if (existingUser) {
-            return res.status(400).json({ error: "User already exists" });
-        }
-
-        const user = new User({ id, first_name, last_name, birthday, marital_status });
-        await user.save();
-
-        res.status(201).json(user);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
-
 
 module.exports = router;
