@@ -2,38 +2,53 @@ const express = require("express");
 const router = express.Router();
 const Cost = require("../models/cost");
 
-// Add Cost Item
+/**
+ * @route POST /api/add
+ * @description Adds a new cost item to the database.
+ * @access Public
+ * @param {string} req.body.description - A short description of the cost.
+ * @param {string} req.body.category - The category of the cost (must be one of: "food", "health", "housing", "sport", "education").
+ * @param {number} req.body.userid - The ID of the user who owns this cost entry.
+ * @param {number} req.body.sum - The total sum of the cost.
+ * @param {string} [req.body.created_at] - (Optional) A full ISO timestamp for the date of the expense.
+ * @param {number} [req.body.year] - (Optional) The year of the expense (used if `created_at` is not provided).
+ * @param {number} [req.body.month] - (Optional) The month of the expense (1-12, used if `created_at` is not provided).
+ * @param {number} [req.body.day] - (Optional) The day of the expense (used if `created_at` is not provided).
+ * @returns {Object} The created cost item.
+ */
 router.post("/add", async (req, res) => {
     try {
-        const { description, category, userid, sum } = req.body;
-        const cost = new Cost({ description, category, userid, sum });
-        await cost.save();
-        res.json(cost);
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
+        const { description, category, userid, sum, created_at, year, month, day } = req.body;
 
-// Get Monthly Report
-router.get("/report", async (req, res) => {
-    try {
-        const { id, year, month } = req.query;
-        const start = new Date(year, month - 1, 1);
-        const end = new Date(year, month, 0);
+        let date;
+        if (created_at) {
+            // If `created_at` is provided, use it as the date
+            date = new Date(created_at);
+        } else if (year && month && day) {
+            // Convert year, month, and day to a UTC Date object
+            // Month is zero-indexed in JavaScript, so subtract 1
+            date = new Date(Date.UTC(year, month - 1, day, 12, 0, 0)); // 12:00 PM UTC prevents time zone shifts
+        } else {
+            // Default to the current date in UTC if no date is provided
+            date = new Date();
+        }
 
-        const costs = await Cost.find({
-            userid: id,
-            created_at: { $gte: start, $lte: end }
+        // Create a new cost entry
+        const cost = new Cost({
+            description,
+            category,
+            userid,
+            sum,
+            date
         });
 
-        const grouped = costs.reduce((acc, cost) => {
-            acc[cost.category] = acc[cost.category] || [];
-            acc[cost.category].push(cost);
-            return acc;
-        }, {});
+        // Save the cost entry in MongoDB
+        await cost.save();
 
-        res.json(grouped);
+        // Return the saved cost item as JSON response
+        res.json(cost);
     } catch (err) {
+        // If an error occurs, send a 500 error response with the error message
         res.status(500).json({ error: err.message });
     }
 });
