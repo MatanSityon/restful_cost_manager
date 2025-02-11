@@ -14,16 +14,29 @@ describe("About API", () => {
      * @returns {void}
      */
     it("should return team members' names", async () => {
+        // Sends a GET request to the `/api/about` endpoint
         const res = await request(app).get("/api/about");
 
-        // Expect a 200 OK response
+        // Expect a 200 OK response status
+        /**
+         * @type {number}
+         */
         expect(res.statusCode).toBe(200);
 
-        // Ensure the response is an array
+        // Ensure the response body is an array
+        /**
+         * @type {boolean}
+         */
         expect(Array.isArray(res.body)).toBe(true);
 
-        // Validate that each item in the array has `first_name` and `last_name`
+        // Validate that the first object in the array contains `first_name` and `last_name` properties
+        /**
+         * @type {Object}
+         */
         expect(res.body[0]).toHaveProperty("first_name");
+        /**
+         * @type {Object}
+         */
         expect(res.body[0]).toHaveProperty("last_name");
     });
 

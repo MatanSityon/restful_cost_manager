@@ -1,24 +1,25 @@
 const express = require("express");
 const router = express.Router();
 const Cost = require("../models/cost");
-const User = require("../models/user"); // Import User model to check if the user exists
+const User = require("../models/user");
+const MonthlyReport = require("../models/monthlyReport");
 
 // Define supported categories
 const CATEGORIES = ["food", "health", "housing", "sport", "education"];
 
-
-const MonthlyReport = require("../models/monthlyReport"); // Import MonthlyReport model
 /**
  * @route POST /api/add
  * @description Adds a new cost item for a user.
  * @access Public
+ * @param {Object} req.body - The request body.
  * @param {string} req.body.userid - The ID of the user.
  * @param {string} req.body.description - A brief description of the cost.
- * @param {string} req.body.category - The category of the cost (food, health, housing, sport, education).
+ * @param {string} req.body.category - The category of the cost (must be one of the predefined categories).
  * @param {number} req.body.sum - The cost amount.
  * @param {number} [req.body.year] - The year of the cost (optional).
  * @param {number} [req.body.month] - The month of the cost (optional, 1-12).
  * @param {number} [req.body.day] - The day of the cost (optional).
+ * @param {string} [req.body.time] - The time of the cost in "hh:mm" format (optional).
  * @returns {Object} The newly created cost object or an error message.
  */
 router.post("/add", async (req, res) => {
@@ -29,20 +30,16 @@ router.post("/add", async (req, res) => {
         if (!description || !category || !userid || !sum) {
             return res.status(400).json({ error: "Missing required fields: description, category, userid, sum" });
         }
-        if (!month || !year || !day || !time)
-        {
+
+        // Set default values for missing date and time fields
+        if (!month || !year || !day || !time) {
             const now = new Date();
-
-            // Extract year, month, and day
             year = now.getFullYear();
-            month = now.getMonth() + 1; // getMonth() returns 0-11, so we add 1
+            month = now.getMonth() + 1; // getMonth() returns 0-11, so add 1
             day = now.getDate();
-
-            // Extract hours and minutes (formatted as hh:mm)
-             hours = now.getHours().toString().padStart(2, "0"); // Ensures two digits (e.g., 09)
-             minutes = now.getMinutes().toString().padStart(2, "0"); // Ensures two digits (e.g., 05)
-             time = `${hours}:${minutes}`;
-
+            const hours = now.getHours().toString().padStart(2, "0");
+            const minutes = now.getMinutes().toString().padStart(2, "0");
+            time = `${hours}:${minutes}`;
         }
 
         // Ensure category is valid
@@ -61,6 +58,7 @@ router.post("/add", async (req, res) => {
         if (!timePattern.test(time)) {
             return res.status(400).json({ error: "Invalid time format. Expected hh:mm (24-hour format)" });
         }
+
         // Convert values to correct types before saving
         const parsedUserId = Number(userid);
         const parsedSum = Number(sum);
@@ -71,6 +69,7 @@ router.post("/add", async (req, res) => {
         if (isNaN(parsedUserId) || isNaN(parsedSum) || isNaN(parsedYear) || isNaN(parsedMonth) || isNaN(parsedDay)) {
             return res.status(400).json({ error: "Invalid numeric values provided" });
         }
+
         // Create and save the cost item
         const cost = new Cost({
             description,
@@ -96,7 +95,7 @@ router.post("/add", async (req, res) => {
             { upsert: true, new: true, setDefaultsOnInsert: true }
         );
 
-        res.status(200).json({ cost});
+        res.status(200).json({ cost });
 
     } catch (err) {
         console.error("Error adding cost:", err);
@@ -108,6 +107,7 @@ router.post("/add", async (req, res) => {
  * @route GET /api/report
  * @description Retrieves the grouped monthly cost report for a user.
  * @access Public
+ * @param {Object} req.query - The request query parameters.
  * @param {string} req.query.id - The user ID.
  * @param {number} req.query.year - The year of the report.
  * @param {number} req.query.month - The month of the report (1-12).
@@ -173,7 +173,5 @@ router.get("/report", async (req, res) => {
         res.status(500).json({ error: "Internal server error" });
     }
 });
-
-
 
 module.exports = router;
