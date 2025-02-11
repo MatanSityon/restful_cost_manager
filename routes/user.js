@@ -12,33 +12,26 @@ const Cost = require("../models/cost");
  */
 router.get("/users/:id", async (req, res) => {
     try {
-        // Find the user by their ID
-        const user = await User.findOne({ id: req.params.id });
+        const userId = Number(req.params.id);
 
-        // If the user does not exist, return a 404 error
-        if (!user) return res.status(404).json({ error: "User not found" });
+        const user = await User.findOne({ id: userId });
 
-        // Calculate the total cost sum for this user
-        const totalCosts = await Cost.aggregate([
-            { $match: { userid: user.id } }, // Filter costs by the user's ID
-            { $group: { _id: null, total: { $sum: "$sum" } } } // Sum up all costs
-        ]);
+        if (!user)
+            return res.status(404).json({ error: "User not found" });
 
-        // Extract the total amount spent, defaulting to 0 if no costs exist
-        const total = totalCosts[0]?.total || 0;
 
-        // Return user details with total costs
         res.json({
             first_name: user.first_name,
             last_name: user.last_name,
             id: user.id,
-            total
+            total: user.total_cost || 0
         });
     } catch (err) {
-        // Handle server errors
         res.status(500).json({ error: err.message });
     }
 });
+
+
 
 /**
  * @route POST /api/users

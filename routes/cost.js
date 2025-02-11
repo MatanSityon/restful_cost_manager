@@ -6,6 +6,8 @@ const User = require("../models/user"); // Import User model to check if the use
 // Define supported categories
 const CATEGORIES = ["food", "health", "housing", "sport", "education"];
 
+
+const MonthlyReport = require("../models/monthlyReport"); // Import MonthlyReport model
 /**
  * @route POST /api/add
  * @description Adds a new cost item for a user.
@@ -34,26 +36,33 @@ router.post("/add", async (req, res) => {
         }
 
         // Ensure user exists
-        const userExists = await User.findOne({ id: userid });
-        if (!userExists) {
+        const user = await User.findOne({ id: userid });
+        if (!user) {
             return res.status(404).json({ error: `User with ID ${userid} not found` });
         }
 
         // Determine the correct date
         let date;
         if (year && month && day) {
-            date = new Date(Date.UTC(year, month - 1, day, 12, 0, 0)); // Force UTC date
+            date = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
         } else {
-            date = new Date(); // Default to current date
+            date = new Date();
         }
 
         // Create and save the cost item
         const cost = new Cost({ description, category, userid, sum, date });
         await cost.save();
 
-        res.status(200).json(cost);
+        // **Ensure the monthly report updates correctly**
+        const updatedReport = await MonthlyReport.findOneAndUpdate(
+            { userid, year: date.getUTCFullYear(), month: date.getUTCMonth() + 1 },
+            { $inc: { [`costs.${category}`]: sum } }, // Increment the category total
+            { upsert: true, new: true }
+        );
+
+        res.status(200).json({ cost, updatedReport });
     } catch (err) {
-        console.error("Error adding cost:", err); // Log the error for debugging
+        console.error("Error adding cost:", err);
         res.status(500).json({ error: "Internal server error" });
     }
 });
@@ -87,48 +96,49 @@ router.get("/report", async (req, res) => {
             return res.status(404).json({ error: `User with ID ${userId} not found` });
         }
 
-        // Define the date range for filtering
-        const start = new Date(reportYear, reportMonth - 1, 1);
-        const end = new Date(reportYear, reportMonth, 0);
+        // Fetch the precomputed monthly report
+        const report = await MonthlyReport.findOne({ userid: userId, year: reportYear, month: reportMonth });
 
-        // Fetch costs for the given user and month
-        const costs = await Cost.find({
-            userid: userId,
-            date: { $gte: start, $lte: end }
-        });
-
-        // Initialize response with categories set to `0`
-        const categorizedCosts = CATEGORIES.reduce((acc, category) => {
-            acc[category] = 0;
+        // Initialize the response structure
+        let categorizedCosts = CATEGORIES.reduce((acc, category) => {
+            acc[category] = []; // Ensure it's an array
             return acc;
         }, {});
 
-        // Populate response if there are costs
-        costs.forEach(cost => {
-            if (categorizedCosts[cost.category] === 0) {
-                categorizedCosts[cost.category] = [];
-            }
-            categorizedCosts[cost.category].push({
-                sum: cost.sum,
-                description: cost.description,
-                day: new Date(cost.date).getDate()
+        if (report) {
+            // Populate the response with precomputed values
+            Object.keys(report.costs).forEach(category => {
+                if (CATEGORIES.includes(category) && report.costs[category] > 0) {
+                    categorizedCosts[category].push({
+                        sum: report.costs[category],
+                        description: `Total for ${category}`,
+                        day: null // No specific day since it's precomputed
+                    });
+                }
             });
+        }
+
+        // Ensure empty categories return `[0]` instead of an empty array
+        Object.keys(categorizedCosts).forEach(category => {
+            if (categorizedCosts[category].length === 0) {
+                categorizedCosts[category] = [0];
+            }
         });
 
-        // Construct the response object
-        const response = {
+        // Return the report response
+        res.json({
             userid: userId,
             year: reportYear,
             month: reportMonth,
             costs: categorizedCosts
-        };
-
-        res.json(response);
+        });
 
     } catch (err) {
-        console.error("Error fetching report:", err); // Log the error for debugging
+        console.error("Error fetching report:", err);
         res.status(500).json({ error: "Internal server error" });
     }
 });
+
+
 
 module.exports = router;

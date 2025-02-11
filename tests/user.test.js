@@ -1,41 +1,57 @@
 const request = require("supertest");
 const app = require("../app");
-
-/**
- * @file User API Tests
- * @description Tests for the `/api/users/:id` endpoint to verify user retrieval.
- */
+const mongoose = require("mongoose");
+const User = require("../models/user");
 
 describe("User API", () => {
+    const testUserId = 999998; // Test user (NOT 123123)
 
-    /**
-     * @test Retrieves user details and total cost.
-     * @description Sends a GET request to `/api/users/:id` for an existing user.
-     * @returns {void}
-     */
-    it("should return user details and total cost", async () => {
-        const res = await request(app).get("/api/users/123123");
+    beforeAll(async () => {
+        await mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
 
-        // Expect a 200 OK response
-        expect(res.statusCode).toBe(200);
+        // Insert a different test user (not 123123)
+        await User.findOneAndUpdate(
+            { id: testUserId },
+            {
+                id: testUserId,
+                first_name: "Another",
+                last_name: "User",
+                birthday: "1995-05-10",
+                marital_status: "married"
+            },
+            { upsert: true, new: true }
+        );
+    });
 
-        // Validate that response contains user details and total cost
-        expect(res.body).toHaveProperty("first_name", "mosh");
-        expect(res.body).toHaveProperty("last_name", "israeli");
-        expect(res.body).toHaveProperty("id", 123123);
-        expect(res.body).toHaveProperty("total"); // Should be 0 if no costs exist
+    beforeEach(async () => {
+        await User.deleteMany({ id: { $ne: 123123, $ne: testUserId } }); // Delete all users except `123123` & test user
+    });
+
+    afterAll(async () => {
+        await User.deleteMany({ id: testUserId }); // Clean up test user after tests
+        await mongoose.connection.close();
     });
 
     /**
-     * @test Returns an error for a non-existing user.
-     * @description Sends a GET request to `/api/users/:id` with an invalid ID.
-     * @returns {void}
+     * @test Retrieves details for an existing test user (not 123123).
+     */
+    it("should return user details and total cost for another user", async () => {
+        const res = await request(app).get(`/api/users/${testUserId}`);
+
+        expect(res.statusCode).toBe(200);
+        expect(res.body).toHaveProperty("first_name", "Another");
+        expect(res.body).toHaveProperty("last_name", "User");
+        expect(res.body).toHaveProperty("id", testUserId);
+        expect(res.body).toHaveProperty("total");
+    });
+
+    /**
+     * @test Returns 404 for a non-existing user.
      */
     it("should return an error for a non-existing user", async () => {
         const res = await request(app).get("/api/users/999999");
 
-        // Expect a 404 Not Found response for a user that does not exist
         expect(res.statusCode).toBe(404);
+        expect(res.body).toHaveProperty("error", "User not found");
     });
-
 });

@@ -1,22 +1,49 @@
 const request = require("supertest");
 const app = require("../app");
-
-/**
- * @file Cost API Tests
- * @description Tests for the `/api/add` endpoint to verify cost item creation.
- */
+const mongoose = require("mongoose");
+const Cost = require("../models/cost");
+const MonthlyReport = require("../models/monthlyReport");
+const User = require("../models/user");
 
 describe("Cost API", () => {
+    const testUserId = 999998; // A separate test user (NOT 123123)
+
+    beforeAll(async () => {
+        await mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
+
+        // Insert a test user (not 123123)
+        await User.findOneAndUpdate(
+            { id: testUserId },
+            {
+                id: testUserId,
+                first_name: "Test",
+                last_name: "User",
+                birthday: "1995-05-10",
+                marital_status: "married"
+            },
+            { upsert: true, new: true }
+        );
+    });
+
+    beforeEach(async () => {
+        await Cost.deleteMany({ userid: { $ne: 123123 } }); // Deletes all except costs of 123123
+        await MonthlyReport.deleteMany({ userid: { $ne: 123123 } }); //Deletes all except reports of 123123
+    });
+
+    afterAll(async () => {
+        await Cost.deleteMany({ userid: { $ne: 123123 } }); // Deletes all except costs of 123123
+        await MonthlyReport.deleteMany({ userid: { $ne: 123123 } }); //  Deletes all except reports of 123123
+        await User.deleteMany({ id: { $ne: 123123 } }); //  Deletes all users except 123123
+        await mongoose.connection.close();
+    });
+
 
     /**
-     * @test Adds a new cost item.
-     * @description Sends a POST request to `/api/add` with a sample cost item.
-     * Expects a successful response.
-     * @returns {void}
+     * @test Retrieves a precomputed monthly report.
      */
-    it("should add a new cost item", async () => {
-        const res = await request(app).post("/api/add").send({
-            userid: 123123, // Using the existing user
+    it("should return a precomputed monthly report", async () => {
+        await request(app).post("/api/add").send({
+            userid: testUserId,
             description: "Gym Membership",
             category: "sport",
             sum: 50,
@@ -25,14 +52,14 @@ describe("Cost API", () => {
             day: 1
         });
 
-        // Expect a 200 OK response
+        const res = await request(app).get(`/api/report?id=${testUserId}&year=2025&month=2`);
+
         expect(res.statusCode).toBe(200);
-
-        // Ensure the response contains the correct data
-        expect(res.body).toHaveProperty("description", "Gym Membership");
-        expect(res.body).toHaveProperty("category", "sport");
-        expect(res.body).toHaveProperty("userid", 123123);
-        expect(res.body).toHaveProperty("sum", 50);
+        expect(res.body.costs.sport).toBeInstanceOf(Array); // ✅ Expect an array
+        expect(res.body.costs.sport[0]).toMatchObject({
+            sum: 50,
+            description: "Total for sport",
+            day: null
+        });
     });
-
 });
