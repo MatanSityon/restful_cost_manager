@@ -2,56 +2,62 @@ const request = require("supertest");
 const app = require("../app");
 const mongoose = require("mongoose");
 const User = require("../models/user");
+const Cost = require("../models/cost");
 
-describe("User API", () => {
-    const testUserId = 999998; // Test user (NOT 123123)
+const TEST_USER_ID = 999999; // ✅ Dedicated test user ID
 
+describe("Report API", () => {
     beforeAll(async () => {
         await mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
 
-        // Insert a different test user (not 123123)
+        // ✅ Ensure the test user exists
         await User.findOneAndUpdate(
-            { id: testUserId },
+            { id: TEST_USER_ID },
             {
-                id: testUserId,
-                first_name: "Another",
-                last_name: "User",
+                id: TEST_USER_ID,
+                first_name: "Report",
+                last_name: "Tester",
                 birthday: "1995-05-10",
-                marital_status: "married"
+                marital_status: "single"
             },
             { upsert: true, new: true }
         );
     });
 
     beforeEach(async () => {
-        await User.deleteMany({ id: { $ne: 123123, $ne: testUserId } }); // Delete all users except `123123` & test user
+        // ✅ Only delete test user's costs
+        await Cost.deleteMany({ userid: TEST_USER_ID });
     });
 
     afterAll(async () => {
-        await User.deleteMany({ id: testUserId }); // Clean up test user after tests
+        // ✅ Clean up ONLY the test user’s data
+        await Cost.deleteMany({ userid: TEST_USER_ID });
+        await User.deleteMany({ id: TEST_USER_ID });
+
         await mongoose.connection.close();
     });
 
     /**
-     * @test Retrieves details for an existing test user (not 123123).
+     * @test Ensures report returns zero for all categories if no costs exist.
      */
-    it("should return user details and total cost for another user", async () => {
-        const res = await request(app).get(`/api/users/${testUserId}`);
+    it("should return [0] for all categories if no expenses exist", async () => {
+        const res = await request(app).get(`/api/report?id=${TEST_USER_ID}&year=2025&month=3`);
 
         expect(res.statusCode).toBe(200);
-        expect(res.body).toHaveProperty("first_name", "Another");
-        expect(res.body).toHaveProperty("last_name", "User");
-        expect(res.body).toHaveProperty("id", testUserId);
-        expect(res.body).toHaveProperty("total");
+        expect(res.body.costs.food).toEqual([0]); // ✅ Expect an array instead of a number
+        expect(res.body.costs.sport).toEqual([0]);
+        expect(res.body.costs.education).toEqual([0]);
+        expect(res.body.costs.health).toEqual([0]);
+        expect(res.body.costs.housing).toEqual([0]);
     });
 
     /**
-     * @test Returns 404 for a non-existing user.
+     * @test Returns 404 for a non-existent user fetching a report.
      */
-    it("should return an error for a non-existing user", async () => {
-        const res = await request(app).get("/api/users/999999");
+    it("should return 404 when requesting a report for a non-existent user", async () => {
+        const res = await request(app).get(`/api/report?id=888888&year=2025&month=2`);
 
         expect(res.statusCode).toBe(404);
-        expect(res.body).toHaveProperty("error", "User not found");
+        expect(res.body).toHaveProperty("error", "User with ID 888888 not found");
     });
 });

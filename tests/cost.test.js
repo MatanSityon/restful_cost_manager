@@ -5,45 +5,47 @@ const Cost = require("../models/cost");
 const MonthlyReport = require("../models/monthlyReport");
 const User = require("../models/user");
 
-describe("Cost API", () => {
-    const testUserId = 999998; // A separate test user (NOT 123123)
+const TEST_USER_ID = 999999; // ✅ Dedicated test user ID
 
+describe("Cost API", () => {
     beforeAll(async () => {
         await mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true });
 
-        // Insert a test user (not 123123)
+        // ✅ Ensure the test user exists
         await User.findOneAndUpdate(
-            { id: testUserId },
+            { id: TEST_USER_ID },
             {
-                id: testUserId,
+                id: TEST_USER_ID,
                 first_name: "Test",
                 last_name: "User",
-                birthday: "1995-05-10",
-                marital_status: "married"
+                birthday: "2000-01-01",
+                marital_status: "single"
             },
             { upsert: true, new: true }
         );
     });
 
     beforeEach(async () => {
-        await Cost.deleteMany({ userid: { $ne: 123123 } }); // Deletes all except costs of 123123
-        await MonthlyReport.deleteMany({ userid: { $ne: 123123 } }); //Deletes all except reports of 123123
+        // ✅ Only delete the test user's data, NOT 123123
+        await Cost.deleteMany({ userid: TEST_USER_ID });
+        await MonthlyReport.deleteMany({ userid: TEST_USER_ID });
     });
 
     afterAll(async () => {
-        await Cost.deleteMany({ userid: { $ne: 123123 } }); // Deletes all except costs of 123123
-        await MonthlyReport.deleteMany({ userid: { $ne: 123123 } }); //  Deletes all except reports of 123123
-        await User.deleteMany({ id: { $ne: 123123 } }); //  Deletes all users except 123123
+        // ✅ Clean up ONLY the test user’s data
+        await Cost.deleteMany({ userid: TEST_USER_ID });
+        await MonthlyReport.deleteMany({ userid: TEST_USER_ID });
+        await User.deleteMany({ id: TEST_USER_ID });
+
         await mongoose.connection.close();
     });
-
 
     /**
      * @test Retrieves a precomputed monthly report.
      */
     it("should return a precomputed monthly report", async () => {
         await request(app).post("/api/add").send({
-            userid: testUserId,
+            userid: TEST_USER_ID, // ✅ Using only test user
             description: "Gym Membership",
             category: "sport",
             sum: 50,
@@ -52,7 +54,7 @@ describe("Cost API", () => {
             day: 1
         });
 
-        const res = await request(app).get(`/api/report?id=${testUserId}&year=2025&month=2`);
+        const res = await request(app).get(`/api/report?id=${TEST_USER_ID}&year=2025&month=2`);
 
         expect(res.statusCode).toBe(200);
         expect(res.body.costs.sport).toBeInstanceOf(Array); // ✅ Expect an array
