@@ -14,20 +14,32 @@ router.get("/users/:id", async (req, res) => {
     try {
         const userId = Number(req.params.id);
 
+        // Find the user by their ID
         const user = await User.findOne({ id: userId });
 
-        if (!user)
-            return res.status(404).json({ error: "User not found" });
+        // If the user does not exist, return a 404 error
+        if (!user) return res.status(404).json({ error: "User not found" });
 
+        // Compute total sum of all costs for this user
+        const totalCosts = await Cost.aggregate([
+            { $match: { userid: userId } },
+            { $group: { _id: null, total: { $sum: "$sum" } } }
+        ]);
 
+        // Extract the total amount spent, defaulting to 0 if no costs exist
+        const total = totalCosts[0]?.total || 0;
+
+        // Return user details with total costs (computed pattern)
         res.json({
             first_name: user.first_name,
             last_name: user.last_name,
             id: user.id,
-            total: user.total_cost || 0
+            total: total
         });
+
     } catch (err) {
-        res.status(500).json({ error: err.message });
+        console.error("Error fetching user details:", err);
+        res.status(500).json({ error: "Internal server error" });
     }
 });
 

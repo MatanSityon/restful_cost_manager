@@ -60,7 +60,7 @@ router.post("/add", async (req, res) => {
             { upsert: true, new: true }
         );
 
-        res.status(200).json({ cost, updatedReport });
+        res.status(200).json({cost});
     } catch (err) {
         console.error("Error adding cost:", err);
         res.status(500).json({ error: "Internal server error" });
@@ -85,7 +85,7 @@ router.get("/report", async (req, res) => {
             return res.status(400).json({ error: "Missing required parameters: id, year, month" });
         }
 
-        // Convert to numbers to ensure correct type
+        // Convert to numbers
         const userId = Number(id);
         const reportYear = Number(year);
         const reportMonth = Number(month);
@@ -96,49 +96,51 @@ router.get("/report", async (req, res) => {
             return res.status(404).json({ error: `User with ID ${userId} not found` });
         }
 
-        // Fetch the precomputed monthly report
-        const report = await MonthlyReport.findOne({ userid: userId, year: reportYear, month: reportMonth });
+        // Define the date range for filtering
+        const start = new Date(reportYear, reportMonth - 1, 1);
+        const end = new Date(reportYear, reportMonth, 0);
 
-        // Initialize the response structure
-        let categorizedCosts = CATEGORIES.reduce((acc, category) => {
-            acc[category] = []; // Ensure it's an array
+        // Fetch costs for the given user and month
+        const costs = await Cost.find({
+            userid: userId,
+            date: { $gte: start, $lte: end }
+        });
+
+        // Initialize response with categories, setting default value to 0
+        const categorizedCosts = CATEGORIES.reduce((acc, category) => {
+            acc[category] = 0; // Default value for empty categories
             return acc;
         }, {});
 
-        if (report) {
-            // Populate the response with precomputed values
-            Object.keys(report.costs).forEach(category => {
-                if (CATEGORIES.includes(category) && report.costs[category] > 0) {
-                    categorizedCosts[category].push({
-                        sum: report.costs[category],
-                        description: `Total for ${category}`,
-                        day: null // No specific day since it's precomputed
-                    });
-                }
-            });
-        }
-
-        // Ensure empty categories return `[0]` instead of an empty array
-        Object.keys(categorizedCosts).forEach(category => {
-            if (categorizedCosts[category].length === 0) {
-                categorizedCosts[category] = [0];
+        // Populate response with actual cost data
+        costs.forEach(cost => {
+            // If category is empty (0), initialize as an array
+            if (categorizedCosts[cost.category] === 0) {
+                categorizedCosts[cost.category] = [];
             }
+            categorizedCosts[cost.category].push({
+                sum: cost.sum,
+                description: cost.description,
+                day: new Date(cost.date).getDate()
+            });
         });
 
-        // Return the report response
-        res.json({
+
+        // Construct the response object
+        const response = {
             userid: userId,
             year: reportYear,
             month: reportMonth,
             costs: categorizedCosts
-        });
+        };
+
+        res.json(response);
 
     } catch (err) {
         console.error("Error fetching report:", err);
         res.status(500).json({ error: "Internal server error" });
     }
 });
-
 
 
 module.exports = router;

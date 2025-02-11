@@ -35,7 +35,7 @@ app.use("/api", aboutRoutes);
  */
 mongoose
     .connect(process.env.MONGO_URI)
-    .then(() => console.log("Connected to MongoDB"))
+    .then(console.log("Connected to MongoDB"))
     .catch((err) => console.error(err));
 
 /**
