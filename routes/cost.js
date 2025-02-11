@@ -23,11 +23,26 @@ const MonthlyReport = require("../models/monthlyReport"); // Import MonthlyRepor
  */
 router.post("/add", async (req, res) => {
     try {
-        const { description, category, userid, sum, year, month, day } = req.body;
+        let { description, category, userid, sum, year, month, day, time } = req.body;
 
         // Ensure required fields are provided
         if (!description || !category || !userid || !sum) {
             return res.status(400).json({ error: "Missing required fields: description, category, userid, sum" });
+        }
+        if (!month || !year || !day || !time)
+        {
+            const now = new Date();
+
+            // Extract year, month, and day
+            year = now.getFullYear();
+            month = now.getMonth() + 1; // getMonth() returns 0-11, so we add 1
+            day = now.getDate();
+
+            // Extract hours and minutes (formatted as hh:mm)
+             hours = now.getHours().toString().padStart(2, "0"); // Ensures two digits (e.g., 09)
+             minutes = now.getMinutes().toString().padStart(2, "0"); // Ensures two digits (e.g., 05)
+             time = `${hours}:${minutes}`;
+
         }
 
         // Ensure category is valid
@@ -41,26 +56,48 @@ router.post("/add", async (req, res) => {
             return res.status(404).json({ error: `User with ID ${userid} not found` });
         }
 
-        // Determine the correct date
-        let date;
-        if (year && month && day) {
-            date = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
-        } else {
-            date = new Date();
+        // Validate time format (hh:mm)
+        const timePattern = /^([0-1][0-9]|2[0-3]):([0-5][0-9])$/;
+        if (!timePattern.test(time)) {
+            return res.status(400).json({ error: "Invalid time format. Expected hh:mm (24-hour format)" });
         }
+        // Convert values to correct types before saving
+        const parsedUserId = Number(userid);
+        const parsedSum = Number(sum);
+        const parsedYear = Number(year);
+        const parsedMonth = Number(month);
+        const parsedDay = Number(day);
 
+        if (isNaN(parsedUserId) || isNaN(parsedSum) || isNaN(parsedYear) || isNaN(parsedMonth) || isNaN(parsedDay)) {
+            return res.status(400).json({ error: "Invalid numeric values provided" });
+        }
         // Create and save the cost item
-        const cost = new Cost({ description, category, userid, sum, date });
+        const cost = new Cost({
+            description,
+            category,
+            userid: parsedUserId,
+            sum: parsedSum,
+            year: parsedYear,
+            month: parsedMonth,
+            day: parsedDay,
+            time
+        });
+
         await cost.save();
 
         // **Ensure the monthly report updates correctly**
-        const updatedReport = await MonthlyReport.findOneAndUpdate(
-            { userid, year: date.getUTCFullYear(), month: date.getUTCMonth() + 1 },
-            { $inc: { [`costs.${category}`]: sum } }, // Increment the category total
-            { upsert: true, new: true }
+        const report = await MonthlyReport.findOneAndUpdate(
+            { userid: parsedUserId, year: parsedYear, month: parsedMonth }, // Identify the report by user and month
+            {
+                $push: {
+                    [`costs.${category}`]: { sum: parsedSum, description, day: parsedDay, time } // Store each expense
+                }
+            },
+            { upsert: true, new: true, setDefaultsOnInsert: true }
         );
 
-        res.status(200).json({cost});
+        res.status(200).json({ cost});
+
     } catch (err) {
         console.error("Error adding cost:", err);
         res.status(500).json({ error: "Internal server error" });
@@ -85,7 +122,7 @@ router.get("/report", async (req, res) => {
             return res.status(400).json({ error: "Missing required parameters: id, year, month" });
         }
 
-        // Convert to numbers
+        // Convert to numbers to ensure correct type
         const userId = Number(id);
         const reportYear = Number(year);
         const reportMonth = Number(month);
@@ -96,35 +133,30 @@ router.get("/report", async (req, res) => {
             return res.status(404).json({ error: `User with ID ${userId} not found` });
         }
 
-        // Define the date range for filtering
-        const start = new Date(reportYear, reportMonth - 1, 1);
-        const end = new Date(reportYear, reportMonth, 0);
-
         // Fetch costs for the given user and month
         const costs = await Cost.find({
             userid: userId,
-            date: { $gte: start, $lte: end }
+            year: reportYear,
+            month: reportMonth
         });
 
-        // Initialize response with categories, setting default value to 0
+        // Initialize response with categories set to `0`
         const categorizedCosts = CATEGORIES.reduce((acc, category) => {
-            acc[category] = 0; // Default value for empty categories
+            acc[category] = 0; // Default to 0
             return acc;
         }, {});
 
-        // Populate response with actual cost data
+        // Populate response if there are costs
         costs.forEach(cost => {
-            // If category is empty (0), initialize as an array
             if (categorizedCosts[cost.category] === 0) {
                 categorizedCosts[cost.category] = [];
             }
             categorizedCosts[cost.category].push({
                 sum: cost.sum,
                 description: cost.description,
-                day: new Date(cost.date).getDate()
+                day: cost.day
             });
         });
-
 
         // Construct the response object
         const response = {
@@ -141,6 +173,7 @@ router.get("/report", async (req, res) => {
         res.status(500).json({ error: "Internal server error" });
     }
 });
+
 
 
 module.exports = router;

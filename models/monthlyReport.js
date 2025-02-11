@@ -5,11 +5,11 @@ const monthlyReportSchema = new mongoose.Schema({
     year: { type: Number, required: true },
     month: { type: Number, required: true },
     costs: {
-        food: { type: Number, default: 0 },
-        health: { type: Number, default: 0 },
-        housing: { type: Number, default: 0 },
-        sport: { type: Number, default: 0 },
-        education: { type: Number, default: 0 }
+        food: { type: Array, default: [] },
+        health: { type: Array, default: [] },
+        housing: { type: Array, default: [] },
+        sport: { type: Array, default: [] },
+        education: { type: Array, default: [] }
     }
 });
 

@@ -48,7 +48,8 @@ describe("Cost API", () => {
             sum: 50,
             year: 2025,
             month: 2,
-            day: 1
+            day: 1,
+            time : "12:45"
         });
 
         const res = await request(app).get(`/api/report?id=${testUserId}&year=2025&month=2`);
