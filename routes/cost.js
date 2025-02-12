@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const Cost = require("../models/cost");
 const User = require("../models/user");
-const MonthlyReport = require("../models/monthlyReport");
+const MonthlyReport = require("../models/monthly_report");
 
 // Define supported categories
 const CATEGORIES = ["food", "health", "housing", "sport", "education"];

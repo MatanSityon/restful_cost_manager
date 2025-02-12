@@ -2,7 +2,7 @@ const request = require("supertest");
 const app = require("../app");
 const mongoose = require("mongoose");
 const Cost = require("../models/cost");
-const MonthlyReport = require("../models/monthlyReport");
+const MonthlyReport = require("../models/monthly_report");
 const User = require("../models/user");
 
 /**
